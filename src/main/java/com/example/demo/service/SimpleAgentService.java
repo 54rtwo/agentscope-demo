@@ -8,7 +8,10 @@ import io.agentscope.core.model.ChatResponse;
 import io.agentscope.core.model.DashScopeChatModel;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import reactor.core.publisher.Flux;
+
+import java.io.IOException;
 
 import java.util.Collections;
 import java.util.List;
@@ -118,15 +121,19 @@ public class SimpleAgentService {
      * AgentScope 使用 Reactor 响应式编程
      *
      * stream() 返回 Flux<ChatResponse>，需要映射为文本流
+     *
+     * SseEmitter 是 Spring MVC Servlet 堆栈下 SSE 的标准写法
+     * 每个文本块通过 emitter.send() 推送，框架自动处理 data: 前缀和 \n\n 分隔符
      */
-    public Flux<String> chatStream(String userInput) {
+    public SseEmitter chatStream(String userInput) {
+        SseEmitter emitter = new SseEmitter(0L);
+
         Msg userMsg = Msg.builder()
                 .role(MsgRole.USER)
                 .content(List.of(TextBlock.builder().text(userInput).build()))
                 .build();
 
-        // stream() 返回 Flux<ChatResponse>，flatMap 提取每个 response 中的文本
-        return model.stream(
+        model.stream(
                 List.of(userMsg),
                 Collections.emptyList(),  // tools
                 null                      // options
@@ -134,6 +141,15 @@ public class SimpleAgentService {
                 Flux.fromIterable(response.getContent())
                         .filter(cb -> cb instanceof TextBlock)
                         .map(cb -> ((TextBlock) cb).getText())
+        ).subscribe(
+                text -> {
+                    try { emitter.send(text); }
+                    catch (IOException e) { emitter.completeWithError(e); }
+                },
+                emitter::completeWithError,
+                emitter::complete
         );
+
+        return emitter;
     }
 }

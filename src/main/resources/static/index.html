@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AgentScope 学习项目</title>
-    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js" defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
@@ -59,7 +59,6 @@
         .message.agent { background: #e8f5e9; color: #333; }
         .message.agent .md-content { line-height: 1.6; }
 
-        /* Markdown styles */
         .md-content h1, .md-content h2, .md-content h3, .md-content h4 {
             margin: 12px 0 8px; color: #1a1a1a;
         }
@@ -90,6 +89,8 @@
             margin: 8px 0;
             color: #555;
         }
+        .md-content a { color: #1976d2; }
+        .md-content hr { border: none; border-top: 1px solid #e0e0e0; margin: 12px 0; }
 
         .message.system {
             background: #fff3e0;
@@ -172,40 +173,37 @@
         let currentAgentMsg = null;
 
         // ---- Typewriter engine ----
-        let twTimer = null;       // interval id
-        let twPos = 0;            // chars typed so far
-        let twText = '';          // target full text
-        let twDone = false;       // stream has finished sending
-        let twEl = null;          // DOM element being typed into
+        let twTimer = null;
+        let twPos = 0;
+        let twTarget = '';
+        let twDone = false;
+        let twEl = null;
 
         function twStart(el) {
-            // Kill any previous typewriter
             if (twTimer) clearInterval(twTimer);
             twPos = 0;
-            twText = '';
+            twTarget = '';
             twDone = false;
             twEl = el;
             el.textContent = '';
 
             twTimer = setInterval(() => {
-                if (twPos >= twText.length) {
+                if (twPos >= twTarget.length) {
                     if (twDone) {
-                        // All chars typed and stream done → render Markdown
                         clearInterval(twTimer);
                         twTimer = null;
-                        renderMarkdown(twEl, twText);
+                        renderMarkdown(twEl, twTarget);
                     }
                     return;
                 }
-                // Type ~2 chars per tick for visible animation
-                twPos = Math.min(twPos + 2, twText.length);
-                twEl.textContent = twText.substring(0, twPos);
+                twPos = Math.min(twPos + 2, twTarget.length);
+                twEl.textContent = twTarget.substring(0, twPos);
                 chatArea.scrollTop = chatArea.scrollHeight;
             }, 20);
         }
 
         function twPush(text) {
-            if (twEl) twText += text;
+            if (twEl) twTarget += text;
         }
 
         function twFinish() {
@@ -218,13 +216,27 @@
 
         // ---- Markdown rendering ----
         function renderMarkdown(el, text) {
-            if (typeof marked !== 'undefined' && marked.parse) {
+            if (typeof marked !== 'undefined' && typeof marked.parse === 'function') {
                 el.innerHTML = marked.parse(text);
             } else {
-                // Fallback: raw text with basic newline → <br>
-                el.innerHTML = text.replace(/</g, '&lt;')
-                                   .replace(/\n/g, '<br>');
+                // Fallback: basic formatting
+                el.innerHTML = text
+                    .replace(/</g, '&lt;')
+                    .replace(/\n/g, '<br>');
             }
+        }
+
+        // ---- SSE parser (handles chunked reads) ----
+        function parseSseChunk(chunk) {
+            const events = [];
+            const lines = chunk.split('\n');
+            for (const line of lines) {
+                if (line.startsWith('data:')) {
+                    const text = line.slice(5).trim();
+                    if (text) events.push(text);
+                }
+            }
+            return events;
         }
 
         // ---- Helpers ----
@@ -259,7 +271,9 @@
         async function sendStreamMessage(text) {
             currentAgentMsg = addMessage('', 'agent streaming');
             setStatus('正在调用 Agent（流式）...', 'loading');
-            twStart(currentAgentMsg.querySelector('.md-content'));
+
+            const contentEl = currentAgentMsg.querySelector('.md-content');
+            twStart(contentEl);
 
             try {
                 const resp = await fetch(`/api/test/chat/stream?input=${encodeURIComponent(text)}`);
@@ -272,14 +286,9 @@
                     const { done, value } = await reader.read();
                     if (done) break;
                     const chunk = decoder.decode(value, { stream: true });
-                    // Parse SSE "data: ..." lines
-                    for (const line of chunk.split('\n')) {
-                        if (line.startsWith('data:')) {
-                            const t = line.slice(5).trim();
-                            if (t) {
-                                twPush(t);
-                            }
-                        }
+                    const texts = parseSseChunk(chunk);
+                    for (const t of texts) {
+                        twPush(t);
                     }
                 }
 
@@ -288,11 +297,9 @@
 
             } catch (err) {
                 twClear();
-                if (currentAgentMsg) {
-                    const cd = currentAgentMsg.querySelector('.md-content');
-                    if (cd) cd.textContent = `错误: ${err.message}`;
-                    currentAgentMsg.classList.add('error');
-                }
+                const cd = currentAgentMsg?.querySelector('.md-content');
+                if (cd) cd.textContent = `错误: ${err.message}`;
+                if (currentAgentMsg) currentAgentMsg.classList.add('error');
                 setStatus(`失败: ${err.message}`, 'error');
             } finally {
                 loading = false;

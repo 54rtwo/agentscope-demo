@@ -4,7 +4,7 @@ import com.example.demo.dto.AgentResponse;
 import com.example.demo.service.SimpleAgentService;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.*;
-import reactor.core.publisher.Flux;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 /**
  * Agent 测试接口
@@ -31,7 +31,7 @@ public class AgentTestController {
      * 流式返回接口（SSE）
      */
     @GetMapping(value = "/chat/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
-    public Flux<String> chatStream(@RequestParam("input") String userInput) {
+    public SseEmitter chatStream(@RequestParam("input") String userInput) {
         return agentService.chatStream(userInput);
     }
 }
