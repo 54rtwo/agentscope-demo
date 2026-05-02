@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AgentScope 学习项目</title>
+    <script src="https://cdn.jsdelivr.net/npm/marked@9/marked.min.js"></script>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
@@ -57,7 +58,6 @@
             padding: 12px;
             border-radius: 8px;
             max-width: 80%;
-            white-space: pre-wrap;
             word-break: break-word;
         }
         .message.user {
@@ -74,6 +74,55 @@
             background: #fff8e1;
             border-left: 3px solid #ff9800;
         }
+        .message.agent .md-content {
+            line-height: 1.6;
+        }
+        .message.agent .md-content h1,
+        .message.agent .md-content h2,
+        .message.agent .md-content h3,
+        .message.agent .md-content h4 {
+            margin: 12px 0 8px;
+            color: #1a1a1a;
+        }
+        .message.agent .md-content h1 { font-size: 1.4em; }
+        .message.agent .md-content h2 { font-size: 1.2em; }
+        .message.agent .md-content h3 { font-size: 1.1em; }
+        .message.agent .md-content p { margin: 8px 0; }
+        .message.agent .md-content code {
+            background: rgba(0,0,0,0.08);
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-size: 0.9em;
+        }
+        .message.agent .md-content pre {
+            background: #2d2d2d;
+            color: #f8f8f2;
+            padding: 12px;
+            border-radius: 6px;
+            overflow-x: auto;
+            margin: 8px 0;
+        }
+        .message.agent .md-content pre code {
+            background: none;
+            padding: 0;
+            color: inherit;
+        }
+        .message.agent .md-content ul,
+        .message.agent .md-content ol {
+            padding-left: 20px;
+            margin: 8px 0;
+        }
+        .message.agent .md-content li {
+            margin: 4px 0;
+        }
+        .message.agent .md-content blockquote {
+            border-left: 3px solid #1976d2;
+            padding-left: 12px;
+            margin: 8px 0;
+            color: #555;
+        }
+        .message.agent .md-content strong { font-weight: 600; }
+        .message.agent .md-content em { font-style: italic; }
         .message.system {
             background: #fff3e0;
             color: #666;
@@ -189,8 +238,13 @@
         const batchModeBtn = document.getElementById('batchMode');
 
         let loading = false;
-        let mode = 'stream';  // 'stream' 或 'batch'
+        let mode = 'stream';
         let currentAgentMsg = null;
+
+        // Typewriter state
+        let twTimer = null;
+        let twTyped = 0;
+        let twStreamDone = false;
 
         function setMode(newMode) {
             mode = newMode;
@@ -201,23 +255,67 @@
         function addMessage(content, type) {
             const msgDiv = document.createElement('div');
             msgDiv.className = `message ${type}`;
-            msgDiv.textContent = content;
+            if (type === 'agent' || type === 'agent streaming') {
+                // Agent messages use a child div for content
+                const contentDiv = document.createElement('div');
+                contentDiv.className = 'md-content';
+                contentDiv.textContent = content;
+                msgDiv.appendChild(contentDiv);
+            } else {
+                msgDiv.textContent = content;
+            }
             chatArea.appendChild(msgDiv);
             chatArea.scrollTop = chatArea.scrollHeight;
             return msgDiv;
         }
 
-        function updateMessage(msgDiv, content, removeClass) {
-            msgDiv.textContent = content;
-            if (removeClass) {
-                msgDiv.classList.remove(removeClass);
-            }
-            chatArea.scrollTop = chatArea.scrollHeight;
+        // Typewriter: render text character-by-character for streaming effect
+        function typewriterStart(agentMsg) {
+            const contentDiv = agentMsg.querySelector('.md-content');
+            if (!contentDiv) return;
+
+            // Stop any previous typewriter
+            if (twTimer) clearInterval(twTimer);
+            twTimer = null;
+            twTyped = 0;
+            twStreamDone = false;
+
+            // Reset display to empty
+            contentDiv.textContent = '';
+
+            twTimer = setInterval(() => {
+                const full = contentDiv._twFull || '';
+                if (twTyped >= full.length) {
+                    if (twStreamDone) {
+                        // Done typing — render as Markdown
+                        clearInterval(twTimer);
+                        twTimer = null;
+                        contentDiv.innerHTML = marked.parse(full);
+                        agentMsg.classList.remove('streaming');
+                    }
+                    return;
+                }
+                // Type ~3 chars per tick for faster effect
+                const chunk = 3;
+                twTyped = Math.min(twTyped + chunk, full.length);
+                contentDiv.textContent = full.substring(0, twTyped);
+                chatArea.scrollTop = chatArea.scrollHeight;
+            }, 16); // ~60fps
         }
 
-        function setStatus(text, type) {
-            statusDiv.textContent = text;
-            statusDiv.className = `status ${type}`;
+        function typewriterAppend(text) {
+            // Called when new SSE chunk arrives
+            if (twTimer) {
+                // Typewriter running, append to full text
+                const contentDiv = currentAgentMsg?.querySelector('.md-content');
+                if (contentDiv) {
+                    contentDiv._twFull = (contentDiv._twFull || '') + text;
+                }
+            }
+        }
+
+        function typewriterFinish() {
+            twStreamDone = true;
         }
 
         // 流式发送
@@ -225,8 +323,10 @@
             currentAgentMsg = addMessage('', 'agent streaming');
             setStatus('正在调用 Agent（流式）...', 'loading');
 
+            // Initialize typewriter
+            typewriterStart(currentAgentMsg);
+
             try {
-                // 使用 fetch 流式读取 SSE
                 const response = await fetch(`/api/test/chat/stream?input=${encodeURIComponent(content)}`);
 
                 if (!response.ok) {
@@ -241,30 +341,37 @@
                     const { done, value } = await reader.read();
                     if (done) break;
 
-                    // 解码数据块
                     const chunk = decoder.decode(value, { stream: true });
-
-                    // SSE 格式：每行是 "data: 内容\n\n"
                     const lines = chunk.split('\n');
                     for (const line of lines) {
                         if (line.startsWith('data:')) {
                             const text = line.substring(5).trim();
                             if (text) {
                                 fullText += text;
-                                updateMessage(currentAgentMsg, fullText, null);
+                                // Store full text on the content div for typewriter
+                                const contentDiv = currentAgentMsg.querySelector('.md-content');
+                                if (contentDiv) {
+                                    contentDiv._twFull = fullText;
+                                }
                             }
                         }
                     }
                 }
 
-                updateMessage(currentAgentMsg, fullText, 'streaming');
+                // Signal stream complete — typewriter will finish and render Markdown
+                typewriterFinish();
                 setStatus('流式输出完成', 'success');
 
             } catch (error) {
-                if (currentAgentMsg) {
-                    updateMessage(currentAgentMsg, `错误: ${error.message}`, 'streaming');
-                    currentAgentMsg.classList.add('error');
+                const contentDiv = currentAgentMsg?.querySelector('.md-content');
+                if (contentDiv) {
+                    contentDiv.textContent = `错误: ${error.message}`;
                 }
+                if (currentAgentMsg) {
+                    currentAgentMsg.classList.add('error');
+                    currentAgentMsg.classList.remove('streaming');
+                }
+                if (twTimer) { clearInterval(twTimer); twTimer = null; }
                 setStatus(`失败: ${error.message}`, 'error');
             }
         }
@@ -285,8 +392,11 @@
                 }
 
                 const data = await response.json();
-
-                addMessage(data.content, 'agent');
+                const msgDiv = addMessage('', 'agent');
+                const contentDiv = msgDiv.querySelector('.md-content');
+                if (contentDiv) {
+                    contentDiv.innerHTML = marked.parse(data.content || '');
+                }
                 setStatus(`成功! 耗时: ${data.durationMs}ms`, 'success');
 
             } catch (error) {
@@ -299,7 +409,6 @@
             const content = userInput.value.trim();
             if (!content || loading) return;
 
-            // 显示用户消息
             addMessage(content, 'user');
             userInput.value = '';
 
@@ -322,7 +431,6 @@
             sendMessage();
         }
 
-        // 支持 Enter 发送
         userInput.addEventListener('keydown', (e) => {
             if (e.key === 'Enter' && !e.ctrlKey && !loading) {
                 e.preventDefault();
