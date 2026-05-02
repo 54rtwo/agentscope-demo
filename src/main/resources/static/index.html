@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AgentScope 学习项目</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #f5f5f5;
+            padding: 20px;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 8px;
+            padding: 24px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        h1 { color: #1976d2; margin-bottom: 8px; }
+        .subtitle { color: #666; margin-bottom: 24px; }
+
+        /* 模式切换 */
+        .mode-switch {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 16px;
+        }
+        .mode-btn {
+            padding: 8px 16px;
+            border: 1px solid #e0e0e0;
+            border-radius: 4px;
+            cursor: pointer;
+            background: white;
+        }
+        .mode-btn.active {
+            background: #1976d2;
+            color: white;
+            border-color: #1976d2;
+        }
+
+        /* 聊天区域 */
+        .chat-area {
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            padding: 16px;
+            min-height: 300px;
+            max-height: 500px;
+            overflow-y: auto;
+            margin-bottom: 16px;
+            background: #fafafa;
+        }
+        .message {
+            margin: 8px 0;
+            padding: 12px;
+            border-radius: 8px;
+            max-width: 80%;
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+        .message.user {
+            background: #1976d2;
+            color: white;
+            margin-left: auto;
+            text-align: right;
+        }
+        .message.agent {
+            background: #e8f5e9;
+            color: #333;
+        }
+        .message.agent.streaming {
+            background: #fff8e1;
+            border-left: 3px solid #ff9800;
+        }
+        .message.system {
+            background: #fff3e0;
+            color: #666;
+            font-size: 12px;
+            max-width: 100%;
+            text-align: center;
+        }
+        .message.error {
+            background: #ffebee;
+            color: #c62828;
+        }
+
+        /* 输入区域 */
+        .input-area {
+            display: flex;
+            gap: 8px;
+        }
+        textarea {
+            flex: 1;
+            padding: 12px;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            resize: none;
+            font-size: 14px;
+            height: 60px;
+        }
+        textarea:focus {
+            outline: none;
+            border-color: #1976d2;
+        }
+        button {
+            padding: 12px 24px;
+            background: #1976d2;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            white-space: nowrap;
+        }
+        button:hover { background: #1565c0; }
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+
+        /* 状态信息 */
+        .status {
+            font-size: 12px;
+            color: #666;
+            margin-top: 8px;
+        }
+        .status.loading { color: #1976d2; }
+        .status.success { color: #4caf50; }
+        .status.error { color: #c62828; }
+
+        /* 快捷测试按钮 */
+        .quick-tests {
+            margin-top: 16px;
+            padding-top: 16px;
+            border-top: 1px solid #e0e0e0;
+        }
+        .quick-tests h3 { font-size: 14px; color: #666; margin-bottom: 8px; }
+        .quick-btn {
+            display: inline-block;
+            padding: 6px 12px;
+            margin: 4px;
+            background: #e0e0e0;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+        }
+        .quick-btn:hover { background: #bdbdbd; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>AgentScope 学习项目</h1>
+        <p class="subtitle">Task 2: 最小 Agent 调用 - 理解 Agent + Model + Msg</p>
+
+        <!-- 模式切换 -->
+        <div class="mode-switch">
+            <button class="mode-btn active" id="streamMode" onclick="setMode('stream')">流式输出</button>
+            <button class="mode-btn" id="batchMode" onclick="setMode('batch')">一次性返回</button>
+        </div>
+
+        <div class="chat-area" id="chatArea">
+            <div class="message system">系统已就绪。输入消息测试 Agent 调用。</div>
+        </div>
+
+        <div class="input-area">
+            <textarea id="userInput" placeholder="输入消息，如：你好，请介绍一下你自己"></textarea>
+            <button id="sendBtn" onclick="sendMessage()">发送</button>
+        </div>
+
+        <div class="status" id="status"></div>
+
+        <div class="quick-tests">
+            <h3>快捷测试：</h3>
+            <span class="quick-btn" onclick="quickTest('你好，请介绍一下你自己')">自我介绍</span>
+            <span class="quick-btn" onclick="quickTest('用一句话解释什么是 Agent')">Agent 解释</span>
+            <span class="quick-btn" onclick="quickTest('列出 5 个 Java 最佳实践')">Java 最佳实践</span>
+            <span class="quick-btn" onclick="quickTest('写一个简单的用户登录流程描述')">流程描述</span>
+        </div>
+    </div>
+
+    <script>
+        const chatArea = document.getElementById('chatArea');
+        const userInput = document.getElementById('userInput');
+        const sendBtn = document.getElementById('sendBtn');
+        const statusDiv = document.getElementById('status');
+        const streamModeBtn = document.getElementById('streamMode');
+        const batchModeBtn = document.getElementById('batchMode');
+
+        let loading = false;
+        let mode = 'stream';  // 'stream' 或 'batch'
+        let currentAgentMsg = null;
+
+        function setMode(newMode) {
+            mode = newMode;
+            streamModeBtn.classList.toggle('active', mode === 'stream');
+            batchModeBtn.classList.toggle('active', mode === 'batch');
+        }
+
+        function addMessage(content, type) {
+            const msgDiv = document.createElement('div');
+            msgDiv.className = `message ${type}`;
+            msgDiv.textContent = content;
+            chatArea.appendChild(msgDiv);
+            chatArea.scrollTop = chatArea.scrollHeight;
+            return msgDiv;
+        }
+
+        function updateMessage(msgDiv, content, removeClass) {
+            msgDiv.textContent = content;
+            if (removeClass) {
+                msgDiv.classList.remove(removeClass);
+            }
+            chatArea.scrollTop = chatArea.scrollHeight;
+        }
+
+        function setStatus(text, type) {
+            statusDiv.textContent = text;
+            statusDiv.className = `status ${type}`;
+        }
+
+        // 流式发送
+        async function sendStreamMessage(content) {
+            currentAgentMsg = addMessage('', 'agent streaming');
+            setStatus('正在调用 Agent（流式）...', 'loading');
+
+            try {
+                // 使用 fetch 流式读取 SSE
+                const response = await fetch(`/api/test/chat/stream?input=${encodeURIComponent(content)}`);
+
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                let fullText = '';
+
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+
+                    // 解码数据块
+                    const chunk = decoder.decode(value, { stream: true });
+
+                    // SSE 格式：每行是 "data: 内容\n\n"
+                    const lines = chunk.split('\n');
+                    for (const line of lines) {
+                        if (line.startsWith('data:')) {
+                            const text = line.substring(5).trim();
+                            if (text) {
+                                fullText += text;
+                                updateMessage(currentAgentMsg, fullText, null);
+                            }
+                        }
+                    }
+                }
+
+                updateMessage(currentAgentMsg, fullText, 'streaming');
+                setStatus('流式输出完成', 'success');
+
+            } catch (error) {
+                if (currentAgentMsg) {
+                    updateMessage(currentAgentMsg, `错误: ${error.message}`, 'streaming');
+                    currentAgentMsg.classList.add('error');
+                }
+                setStatus(`失败: ${error.message}`, 'error');
+            }
+        }
+
+        // 一次性发送
+        async function sendBatchMessage(content) {
+            setStatus('正在调用 Agent...', 'loading');
+
+            try {
+                const response = await fetch('/api/test/chat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'text/plain' },
+                    body: content
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+
+                const data = await response.json();
+
+                addMessage(data.content, 'agent');
+                setStatus(`成功! 耗时: ${data.durationMs}ms`, 'success');
+
+            } catch (error) {
+                addMessage(`错误: ${error.message}`, 'error');
+                setStatus(`失败: ${error.message}`, 'error');
+            }
+        }
+
+        async function sendMessage() {
+            const content = userInput.value.trim();
+            if (!content || loading) return;
+
+            // 显示用户消息
+            addMessage(content, 'user');
+            userInput.value = '';
+
+            loading = true;
+            sendBtn.disabled = true;
+
+            if (mode === 'stream') {
+                await sendStreamMessage(content);
+            } else {
+                await sendBatchMessage(content);
+            }
+
+            loading = false;
+            sendBtn.disabled = false;
+            currentAgentMsg = null;
+        }
+
+        function quickTest(text) {
+            userInput.value = text;
+            sendMessage();
+        }
+
+        // 支持 Enter 发送
+        userInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && !e.ctrlKey && !loading) {
+                e.preventDefault();
+                sendMessage();
+            }
+        });
+    </script>
+</body>
+</html>

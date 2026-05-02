@@ -1,0 +1,11 @@
+server:
+  port: 8080
+
+agentscope:
+  dashscope:
+    api-key: sk-edc259c47cd448ddac32aaf514035a06
+    model-name: MiniMax-M2.5
+
+spring:
+  application:
+    name: agentscope-demo
