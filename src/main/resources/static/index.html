@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AgentScope 学习项目</title>
-    <script src="https://cdn.jsdelivr.net/npm/marked@9/marked.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js" defer></script>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
@@ -23,12 +23,7 @@
         h1 { color: #1976d2; margin-bottom: 8px; }
         .subtitle { color: #666; margin-bottom: 24px; }
 
-        /* 模式切换 */
-        .mode-switch {
-            display: flex;
-            gap: 8px;
-            margin-bottom: 16px;
-        }
+        .mode-switch { display: flex; gap: 8px; margin-bottom: 16px; }
         .mode-btn {
             padding: 8px 16px;
             border: 1px solid #e0e0e0;
@@ -36,13 +31,8 @@
             cursor: pointer;
             background: white;
         }
-        .mode-btn.active {
-            background: #1976d2;
-            color: white;
-            border-color: #1976d2;
-        }
+        .mode-btn.active { background: #1976d2; color: white; border-color: #1976d2; }
 
-        /* 聊天区域 */
         .chat-area {
             border: 1px solid #e0e0e0;
             border-radius: 8px;
@@ -66,35 +56,24 @@
             margin-left: auto;
             text-align: right;
         }
-        .message.agent {
-            background: #e8f5e9;
-            color: #333;
+        .message.agent { background: #e8f5e9; color: #333; }
+        .message.agent .md-content { line-height: 1.6; }
+
+        /* Markdown styles */
+        .md-content h1, .md-content h2, .md-content h3, .md-content h4 {
+            margin: 12px 0 8px; color: #1a1a1a;
         }
-        .message.agent.streaming {
-            background: #fff8e1;
-            border-left: 3px solid #ff9800;
-        }
-        .message.agent .md-content {
-            line-height: 1.6;
-        }
-        .message.agent .md-content h1,
-        .message.agent .md-content h2,
-        .message.agent .md-content h3,
-        .message.agent .md-content h4 {
-            margin: 12px 0 8px;
-            color: #1a1a1a;
-        }
-        .message.agent .md-content h1 { font-size: 1.4em; }
-        .message.agent .md-content h2 { font-size: 1.2em; }
-        .message.agent .md-content h3 { font-size: 1.1em; }
-        .message.agent .md-content p { margin: 8px 0; }
-        .message.agent .md-content code {
+        .md-content h1 { font-size: 1.4em; }
+        .md-content h2 { font-size: 1.2em; }
+        .md-content h3 { font-size: 1.1em; }
+        .md-content p { margin: 8px 0; }
+        .md-content code {
             background: rgba(0,0,0,0.08);
             padding: 2px 6px;
             border-radius: 3px;
             font-size: 0.9em;
         }
-        .message.agent .md-content pre {
+        .md-content pre {
             background: #2d2d2d;
             color: #f8f8f2;
             padding: 12px;
@@ -102,27 +81,16 @@
             overflow-x: auto;
             margin: 8px 0;
         }
-        .message.agent .md-content pre code {
-            background: none;
-            padding: 0;
-            color: inherit;
-        }
-        .message.agent .md-content ul,
-        .message.agent .md-content ol {
-            padding-left: 20px;
-            margin: 8px 0;
-        }
-        .message.agent .md-content li {
-            margin: 4px 0;
-        }
-        .message.agent .md-content blockquote {
+        .md-content pre code { background: none; padding: 0; color: inherit; }
+        .md-content ul, .md-content ol { padding-left: 20px; margin: 8px 0; }
+        .md-content li { margin: 4px 0; }
+        .md-content blockquote {
             border-left: 3px solid #1976d2;
             padding-left: 12px;
             margin: 8px 0;
             color: #555;
         }
-        .message.agent .md-content strong { font-weight: 600; }
-        .message.agent .md-content em { font-style: italic; }
+
         .message.system {
             background: #fff3e0;
             color: #666;
@@ -130,70 +98,35 @@
             max-width: 100%;
             text-align: center;
         }
-        .message.error {
-            background: #ffebee;
-            color: #c62828;
-        }
+        .message.error { background: #ffebee; color: #c62828; }
 
-        /* 输入区域 */
-        .input-area {
-            display: flex;
-            gap: 8px;
-        }
+        .input-area { display: flex; gap: 8px; }
         textarea {
-            flex: 1;
-            padding: 12px;
-            border: 1px solid #e0e0e0;
-            border-radius: 8px;
-            resize: none;
-            font-size: 14px;
-            height: 60px;
+            flex: 1; padding: 12px; border: 1px solid #e0e0e0;
+            border-radius: 8px; resize: none; font-size: 14px; height: 60px;
         }
-        textarea:focus {
-            outline: none;
-            border-color: #1976d2;
-        }
+        textarea:focus { outline: none; border-color: #1976d2; }
         button {
-            padding: 12px 24px;
-            background: #1976d2;
-            color: white;
-            border: none;
-            border-radius: 8px;
-            cursor: pointer;
-            font-size: 14px;
+            padding: 12px 24px; background: #1976d2; color: white;
+            border: none; border-radius: 8px; cursor: pointer; font-size: 14px;
             white-space: nowrap;
         }
         button:hover { background: #1565c0; }
-        button:disabled {
-            background: #ccc;
-            cursor: not-allowed;
-        }
+        button:disabled { background: #ccc; cursor: not-allowed; }
 
-        /* 状态信息 */
-        .status {
-            font-size: 12px;
-            color: #666;
-            margin-top: 8px;
-        }
+        .status { font-size: 12px; color: #666; margin-top: 8px; }
         .status.loading { color: #1976d2; }
         .status.success { color: #4caf50; }
         .status.error { color: #c62828; }
 
-        /* 快捷测试按钮 */
         .quick-tests {
-            margin-top: 16px;
-            padding-top: 16px;
+            margin-top: 16px; padding-top: 16px;
             border-top: 1px solid #e0e0e0;
         }
         .quick-tests h3 { font-size: 14px; color: #666; margin-bottom: 8px; }
         .quick-btn {
-            display: inline-block;
-            padding: 6px 12px;
-            margin: 4px;
-            background: #e0e0e0;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 12px;
+            display: inline-block; padding: 6px 12px; margin: 4px;
+            background: #e0e0e0; border-radius: 4px; cursor: pointer; font-size: 12px;
         }
         .quick-btn:hover { background: #bdbdbd; }
     </style>
@@ -203,7 +136,6 @@
         <h1>AgentScope 学习项目</h1>
         <p class="subtitle">Task 2: 最小 Agent 调用 - 理解 Agent + Model + Msg</p>
 
-        <!-- 模式切换 -->
         <div class="mode-switch">
             <button class="mode-btn active" id="streamMode" onclick="setMode('stream')">流式输出</button>
             <button class="mode-btn" id="batchMode" onclick="setMode('batch')">一次性返回</button>
@@ -234,33 +166,76 @@
         const userInput = document.getElementById('userInput');
         const sendBtn = document.getElementById('sendBtn');
         const statusDiv = document.getElementById('status');
-        const streamModeBtn = document.getElementById('streamMode');
-        const batchModeBtn = document.getElementById('batchMode');
 
         let loading = false;
         let mode = 'stream';
         let currentAgentMsg = null;
 
-        // Typewriter state
-        let twTimer = null;
-        let twTyped = 0;
-        let twStreamDone = false;
+        // ---- Typewriter engine ----
+        let twTimer = null;       // interval id
+        let twPos = 0;            // chars typed so far
+        let twText = '';          // target full text
+        let twDone = false;       // stream has finished sending
+        let twEl = null;          // DOM element being typed into
 
-        function setMode(newMode) {
-            mode = newMode;
-            streamModeBtn.classList.toggle('active', mode === 'stream');
-            batchModeBtn.classList.toggle('active', mode === 'batch');
+        function twStart(el) {
+            // Kill any previous typewriter
+            if (twTimer) clearInterval(twTimer);
+            twPos = 0;
+            twText = '';
+            twDone = false;
+            twEl = el;
+            el.textContent = '';
+
+            twTimer = setInterval(() => {
+                if (twPos >= twText.length) {
+                    if (twDone) {
+                        // All chars typed and stream done → render Markdown
+                        clearInterval(twTimer);
+                        twTimer = null;
+                        renderMarkdown(twEl, twText);
+                    }
+                    return;
+                }
+                // Type ~2 chars per tick for visible animation
+                twPos = Math.min(twPos + 2, twText.length);
+                twEl.textContent = twText.substring(0, twPos);
+                chatArea.scrollTop = chatArea.scrollHeight;
+            }, 20);
         }
 
+        function twPush(text) {
+            if (twEl) twText += text;
+        }
+
+        function twFinish() {
+            twDone = true;
+        }
+
+        function twClear() {
+            if (twTimer) { clearInterval(twTimer); twTimer = null; }
+        }
+
+        // ---- Markdown rendering ----
+        function renderMarkdown(el, text) {
+            if (typeof marked !== 'undefined' && marked.parse) {
+                el.innerHTML = marked.parse(text);
+            } else {
+                // Fallback: raw text with basic newline → <br>
+                el.innerHTML = text.replace(/</g, '&lt;')
+                                   .replace(/\n/g, '<br>');
+            }
+        }
+
+        // ---- Helpers ----
         function addMessage(content, type) {
             const msgDiv = document.createElement('div');
             msgDiv.className = `message ${type}`;
             if (type === 'agent' || type === 'agent streaming') {
-                // Agent messages use a child div for content
-                const contentDiv = document.createElement('div');
-                contentDiv.className = 'md-content';
-                contentDiv.textContent = content;
-                msgDiv.appendChild(contentDiv);
+                const cd = document.createElement('div');
+                cd.className = 'md-content';
+                cd.textContent = content;
+                msgDiv.appendChild(cd);
             } else {
                 msgDiv.textContent = content;
             }
@@ -269,172 +244,107 @@
             return msgDiv;
         }
 
-        // Typewriter: render text character-by-character for streaming effect
-        function typewriterStart(agentMsg) {
-            const contentDiv = agentMsg.querySelector('.md-content');
-            if (!contentDiv) return;
-
-            // Stop any previous typewriter
-            if (twTimer) clearInterval(twTimer);
-            twTimer = null;
-            twTyped = 0;
-            twStreamDone = false;
-
-            // Reset display to empty
-            contentDiv.textContent = '';
-
-            twTimer = setInterval(() => {
-                const full = contentDiv._twFull || '';
-                if (twTyped >= full.length) {
-                    if (twStreamDone) {
-                        // Done typing — render as Markdown
-                        clearInterval(twTimer);
-                        twTimer = null;
-                        contentDiv.innerHTML = marked.parse(full);
-                        agentMsg.classList.remove('streaming');
-                    }
-                    return;
-                }
-                // Type ~3 chars per tick for faster effect
-                const chunk = 3;
-                twTyped = Math.min(twTyped + chunk, full.length);
-                contentDiv.textContent = full.substring(0, twTyped);
-                chatArea.scrollTop = chatArea.scrollHeight;
-            }, 16); // ~60fps
+        function setStatus(text, type) {
+            statusDiv.textContent = text;
+            statusDiv.className = `status ${type}`;
         }
 
-        function typewriterAppend(text) {
-            // Called when new SSE chunk arrives
-            if (twTimer) {
-                // Typewriter running, append to full text
-                const contentDiv = currentAgentMsg?.querySelector('.md-content');
-                if (contentDiv) {
-                    contentDiv._twFull = (contentDiv._twFull || '') + text;
-                }
-            }
+        function setMode(m) {
+            mode = m;
+            document.getElementById('streamMode').classList.toggle('active', m === 'stream');
+            document.getElementById('batchMode').classList.toggle('active', m === 'batch');
         }
 
-        function typewriterFinish() {
-            twStreamDone = true;
-        }
-
-        // 流式发送
-        async function sendStreamMessage(content) {
+        // ---- Stream send ----
+        async function sendStreamMessage(text) {
             currentAgentMsg = addMessage('', 'agent streaming');
             setStatus('正在调用 Agent（流式）...', 'loading');
-
-            // Initialize typewriter
-            typewriterStart(currentAgentMsg);
+            twStart(currentAgentMsg.querySelector('.md-content'));
 
             try {
-                const response = await fetch(`/api/test/chat/stream?input=${encodeURIComponent(content)}`);
+                const resp = await fetch(`/api/test/chat/stream?input=${encodeURIComponent(text)}`);
+                if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
 
-                if (!response.ok) {
-                    throw new Error(`HTTP ${response.status}`);
-                }
-
-                const reader = response.body.getReader();
+                const reader = resp.body.getReader();
                 const decoder = new TextDecoder();
-                let fullText = '';
 
                 while (true) {
                     const { done, value } = await reader.read();
                     if (done) break;
-
                     const chunk = decoder.decode(value, { stream: true });
-                    const lines = chunk.split('\n');
-                    for (const line of lines) {
+                    // Parse SSE "data: ..." lines
+                    for (const line of chunk.split('\n')) {
                         if (line.startsWith('data:')) {
-                            const text = line.substring(5).trim();
-                            if (text) {
-                                fullText += text;
-                                // Store full text on the content div for typewriter
-                                const contentDiv = currentAgentMsg.querySelector('.md-content');
-                                if (contentDiv) {
-                                    contentDiv._twFull = fullText;
-                                }
+                            const t = line.slice(5).trim();
+                            if (t) {
+                                twPush(t);
                             }
                         }
                     }
                 }
 
-                // Signal stream complete — typewriter will finish and render Markdown
-                typewriterFinish();
+                twFinish();
                 setStatus('流式输出完成', 'success');
 
-            } catch (error) {
-                const contentDiv = currentAgentMsg?.querySelector('.md-content');
-                if (contentDiv) {
-                    contentDiv.textContent = `错误: ${error.message}`;
-                }
+            } catch (err) {
+                twClear();
                 if (currentAgentMsg) {
+                    const cd = currentAgentMsg.querySelector('.md-content');
+                    if (cd) cd.textContent = `错误: ${err.message}`;
                     currentAgentMsg.classList.add('error');
-                    currentAgentMsg.classList.remove('streaming');
                 }
-                if (twTimer) { clearInterval(twTimer); twTimer = null; }
-                setStatus(`失败: ${error.message}`, 'error');
+                setStatus(`失败: ${err.message}`, 'error');
+            } finally {
+                loading = false;
+                sendBtn.disabled = false;
+                currentAgentMsg = null;
             }
         }
 
-        // 一次性发送
-        async function sendBatchMessage(content) {
+        // ---- Batch send ----
+        async function sendBatchMessage(text) {
             setStatus('正在调用 Agent...', 'loading');
-
             try {
-                const response = await fetch('/api/test/chat', {
+                const resp = await fetch('/api/test/chat', {
                     method: 'POST',
                     headers: { 'Content-Type': 'text/plain' },
-                    body: content
+                    body: text
                 });
-
-                if (!response.ok) {
-                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-                }
-
-                const data = await response.json();
+                if (!resp.ok) throw new Error(`HTTP ${resp.status}: ${resp.statusText}`);
+                const data = await resp.json();
                 const msgDiv = addMessage('', 'agent');
-                const contentDiv = msgDiv.querySelector('.md-content');
-                if (contentDiv) {
-                    contentDiv.innerHTML = marked.parse(data.content || '');
-                }
+                renderMarkdown(msgDiv.querySelector('.md-content'), data.content || '');
                 setStatus(`成功! 耗时: ${data.durationMs}ms`, 'success');
-
-            } catch (error) {
-                addMessage(`错误: ${error.message}`, 'error');
-                setStatus(`失败: ${error.message}`, 'error');
+            } catch (err) {
+                addMessage(`错误: ${err.message}`, 'error');
+                setStatus(`失败: ${err.message}`, 'error');
+            } finally {
+                loading = false;
+                sendBtn.disabled = false;
             }
         }
 
+        // ---- Main send ----
         async function sendMessage() {
-            const content = userInput.value.trim();
-            if (!content || loading) return;
-
-            addMessage(content, 'user');
+            const text = userInput.value.trim();
+            if (!text || loading) return;
+            addMessage(text, 'user');
             userInput.value = '';
-
             loading = true;
             sendBtn.disabled = true;
 
             if (mode === 'stream') {
-                await sendStreamMessage(content);
+                await sendStreamMessage(text);
             } else {
-                await sendBatchMessage(content);
+                await sendBatchMessage(text);
             }
-
-            loading = false;
-            sendBtn.disabled = false;
-            currentAgentMsg = null;
         }
 
-        function quickTest(text) {
-            userInput.value = text;
-            sendMessage();
-        }
+        function quickTest(t) { userInput.value = t; sendMessage(); }
 
-        userInput.addEventListener('keydown', (e) => {
+        userInput.addEventListener('keydown', e => {
             if (e.key === 'Enter' && !e.ctrlKey && !loading) {
-                e.preventDefault();
-                sendMessage();
+                e.preventDefault(); sendMessage();
             }
         });
     </script>
