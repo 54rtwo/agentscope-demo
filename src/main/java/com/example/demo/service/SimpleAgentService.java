@@ -1,106 +1,95 @@
 package com.example.demo.service;
 
 import com.example.demo.dto.AgentResponse;
+import com.example.demo.tools.FlowchartTools;
+import io.agentscope.core.ReActAgent;
 import io.agentscope.core.message.Msg;
 import io.agentscope.core.message.MsgRole;
 import io.agentscope.core.message.TextBlock;
 import io.agentscope.core.model.ChatResponse;
 import io.agentscope.core.model.DashScopeChatModel;
+import io.agentscope.core.tool.Toolkit;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import reactor.core.publisher.Flux;
 
 import java.io.IOException;
-
 import java.util.Collections;
 import java.util.List;
 
 /**
- * 最简单的 Agent 服务
+ * Agent 服务
  *
- * 教学目标：理解 AgentScope 三大核心抽象
- *
- * ┌─────────────────────────────────────────────────┐
- * │ Model = LLM 的封装                              │
- * │   - DashScopeChatModel: 通义千问                │
- * │   - 所有 Model 通过 builder 模式创建            │
- * └─────────────────────────────────────────────────┘
- *
- * ┌─────────────────────────────────────────────────┐
- * │ Msg = 消息结构                                  │
- * │   - role: 发送者角色 (USER/ASSISTANT/SYSTEM)    │
- * │   - content: List<ContentBlock>                 │
- * └─────────────────────────────────────────────────┘
- *
- * ┌─────────────────────────────────────────────────┐
- * │ Agent = 能处理消息的实体                         │
- * │   - 最简形式：Model 本身就是 Agent              │
- * │   - 复杂形式：ReActAgent 包装 Model + Tool      │
- * └─────────────────────────────────────────────────┘
+ * 提供两种 Agent 调用方式：
+ * 1. simpleChat() — 纯 Model 调用（无工具），对比基准
+ * 2. chat()       — ReActAgent 调用（有工具），真正的 Agent
  */
 @Service
 public class SimpleAgentService {
 
     private final DashScopeChatModel model;
+    private final ReActAgent reactAgent;
 
     /**
-     * 构造函数：创建 Model
+     * 构造函数：同时创建 Model 和 ReActAgent
      *
-     * ===== 教学点：Model 的创建 =====
-     * DashScopeChatModel 是 AgentScope 对阿里云通义千问的封装
-     * 所有 Model 都通过 builder 模式创建，统一接口
+     * ===== 教学点：Toolkit 注册工具 =====
+     * Toolkit 是工具的容器。
+     * registerTool(Object) 会扫描传入对象上所有 @Tool 注解的方法。
      */
     public SimpleAgentService(
+            FlowchartTools flowchartTools,
             @Value("${agentscope.dashscope.api-key}") String apiKey,
             @Value("${agentscope.dashscope.model-name}") String modelName) {
 
+        // 1. 创建 Model
         this.model = DashScopeChatModel.builder()
                 .apiKey(apiKey)
                 .modelName(modelName)
-                // 可选配置：temperature、maxTokens 等
-                // .temperature(0.7)
-                // .maxTokens(2000)
                 .build();
 
-        // 注意：Model 创建后就可以直接当 Agent 用了
-        // 因为 Model 实现了 Agent 接口
+        // 2. 创建 Toolkit 并注册工具
+        Toolkit toolkit = new Toolkit();
+        toolkit.registerTool(flowchartTools);
+
+        // ===== 教学点：ReActAgent 创建 =====
+        // ReActAgent 是能"推理→行动"循环的 Agent
+        // - model: LLM 负责推理
+        // - toolkit: 让 Agent 知道有哪些工具可用
+        // - maxIters: 最大循环次数（防止无限循环）
+        // - sysPrompt: 定义 Agent 的角色和行为准则
+        this.reactAgent = ReActAgent.builder()
+                .name("FlowchartHelper")
+                .sysPrompt("你是一个智能助手。当用户请求保存内容时，使用 saveAsHtml 工具。")
+                .model(this.model)
+                .toolkit(toolkit)
+                .maxIters(5)
+                .build();
     }
 
     /**
-     * 最简单的 Agent 调用（一次性返回）
+     * 纯 Model 调用（无工具，对比基准）
      *
-     * ===== 教学点：Msg 的构建 =====
-     * Msg 是 AgentScope 的消息抽象
-     *
-     * ===== 教学点：Agent 的最小调用 =====
-     * 1.0.4 中 Model 只有 stream() 方法，没有 call()
-     * 通过 .stream(msgs, tools, options).last().block() 获取一次性结果
-     *
-     * stream() 返回 Flux<ChatResponse>，不是 Flux<Msg>
-     * ChatResponse.getContent() 返回 List<ContentBlock>
+     * ===== 教学点：Model 本身就是最简单的 Agent =====
+     * 这种方式下，LLM 只能生成文本回复，无法执行实际操作。
      */
-    public AgentResponse chat(String userInput) {
+    public AgentResponse simpleChat(String userInput) {
         long start = System.currentTimeMillis();
 
-        // 构建 user 消息
-        // ===== 教学点：content 是 List<ContentBlock> =====
         Msg userMsg = Msg.builder()
                 .role(MsgRole.USER)
                 .content(List.of(TextBlock.builder().text(userInput).build()))
                 .build();
 
-        // 调用 Model：stream().last().block() 模拟 call()
         ChatResponse response = model.stream(
                 List.of(userMsg),
-                Collections.emptyList(),  // tools
-                null                      // options
+                Collections.emptyList(),
+                null
         ).last().block();
 
         long duration = System.currentTimeMillis() - start;
 
-        // 封装响应结果
-        // ===== 教学点：从 ChatResponse 提取文本 =====
         String responseText = response.getContent().stream()
                 .filter(cb -> cb instanceof TextBlock)
                 .map(cb -> ((TextBlock) cb).getText())
@@ -109,21 +98,55 @@ public class SimpleAgentService {
 
         return new AgentResponse(
                 responseText,
-                model.getModelName(),
+                model.getModelName() + " (无工具)",
                 duration
         );
     }
 
     /**
-     * 流式 Agent 调用（实时返回）
+     * ReActAgent 调用（有工具）
      *
-     * ===== 教学点：响应式流式输出 =====
-     * AgentScope 使用 Reactor 响应式编程
+     * ===== 教学点：ReActAgent 的调用 =====
+     * 调用方式和纯 Model 一样：agent.call(msg).block()
+     * 但内部执行 ReAct 循环：
+     *   1. Reasoning — LLM 推理：用户想要什么？应该用什么工具？
+     *   2. Acting    — 如果决定调用工具 → 执行工具 → 获取结果
+     *   3. 把工具结果反馈给 LLM → 继续推理
+     *   4. 直到 LLM 认为任务完成
+     */
+    public AgentResponse chat(String userInput) {
+        long start = System.currentTimeMillis();
+
+        Msg userMsg = Msg.builder()
+                .role(MsgRole.USER)
+                .content(List.of(TextBlock.builder().text(userInput).build()))
+                .build();
+
+        // ===== 教学点：ReActAgent.call() 返回 Mono<Msg> =====
+        // 注意：ReActAgent 有真正的 call() 方法（继承自 AgentBase）
+        // 不需要像 Model 那样用 stream().last().block()
+        Msg response = reactAgent.call(userMsg).block();
+
+        long duration = System.currentTimeMillis() - start;
+
+        String responseText = response.getContent().stream()
+                .filter(cb -> cb instanceof TextBlock)
+                .map(cb -> ((TextBlock) cb).getText())
+                .findFirst()
+                .orElse("");
+
+        return new AgentResponse(
+                responseText,
+                model.getModelName() + " + ReActAgent",
+                duration
+        );
+    }
+
+    /**
+     * 流式调用（ReActAgent）
      *
-     * stream() 返回 Flux<ChatResponse>，需要映射为文本流
-     *
-     * SseEmitter 是 Spring MVC Servlet 堆栈下 SSE 的标准写法
-     * 每个文本块通过 emitter.send() 推送，框架自动处理 data: 前缀和 \n\n 分隔符
+     * 注意：ReActAgent 的流式输出比较复杂，因为中间涉及工具调用。
+     * 当前版本先提供纯 Model 的流式作为对比。
      */
     public SseEmitter chatStream(String userInput) {
         SseEmitter emitter = new SseEmitter(0L);
@@ -135,8 +158,8 @@ public class SimpleAgentService {
 
         model.stream(
                 List.of(userMsg),
-                Collections.emptyList(),  // tools
-                null                      // options
+                Collections.emptyList(),
+                null
         ).flatMap(response ->
                 Flux.fromIterable(response.getContent())
                         .filter(cb -> cb instanceof TextBlock)
@@ -151,5 +174,12 @@ public class SimpleAgentService {
         );
 
         return emitter;
+    }
+
+    /**
+     * 暴露 Toolkit（供后续 Task 查看已注册工具）
+     */
+    public ReActAgent getAgent() {
+        return reactAgent;
     }
 }

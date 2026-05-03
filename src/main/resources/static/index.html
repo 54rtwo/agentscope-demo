@@ -138,8 +138,9 @@
         <p class="subtitle">Task 2: 最小 Agent 调用 - 理解 Agent + Model + Msg</p>
 
         <div class="mode-switch">
-            <button class="mode-btn active" id="streamMode" onclick="setMode('stream')">流式输出</button>
-            <button class="mode-btn" id="batchMode" onclick="setMode('batch')">一次性返回</button>
+            <button class="mode-btn active" id="reactMode" onclick="setAgentMode('react')">ReActAgent</button>
+            <button class="mode-btn" id="simpleMode" onclick="setAgentMode('simple')">纯 Model</button>
+            <button class="mode-btn" id="streamMode" onclick="setMode('stream')">流式</button>
         </div>
 
         <div class="chat-area" id="chatArea">
@@ -156,9 +157,9 @@
         <div class="quick-tests">
             <h3>快捷测试：</h3>
             <span class="quick-btn" onclick="quickTest('你好，请介绍一下你自己')">自我介绍</span>
-            <span class="quick-btn" onclick="quickTest('用一句话解释什么是 Agent')">Agent 解释</span>
+            <span class="quick-btn" onclick="quickTest('请把\'Hello World\'保存为 hello.html')">保存文件</span>
+            <span class="quick-btn" onclick="quickTest('当前是什么时间？')">当前时间</span>
             <span class="quick-btn" onclick="quickTest('列出 5 个 Java 最佳实践')">Java 最佳实践</span>
-            <span class="quick-btn" onclick="quickTest('写一个简单的用户登录流程描述')">流程描述</span>
         </div>
     </div>
 
@@ -170,6 +171,7 @@
 
         let loading = false;
         let mode = 'stream';
+        let agentMode = 'react';   // 'react' or 'simple'
         let currentAgentMsg = null;
 
         // ---- Typewriter engine ----
@@ -261,13 +263,18 @@
             statusDiv.className = `status ${type}`;
         }
 
+        function setAgentMode(m) {
+            agentMode = m;
+            document.getElementById('reactMode').classList.toggle('active', m === 'react');
+            document.getElementById('simpleMode').classList.toggle('active', m === 'simple');
+        }
+
         function setMode(m) {
             mode = m;
             document.getElementById('streamMode').classList.toggle('active', m === 'stream');
-            document.getElementById('batchMode').classList.toggle('active', m === 'batch');
         }
 
-        // ---- Stream send ----
+        // ---- Stream send (simple model only) ----
         async function sendStreamMessage(text) {
             currentAgentMsg = addMessage('', 'agent streaming');
             setStatus('正在调用 Agent（流式）...', 'loading');
@@ -309,10 +316,10 @@
         }
 
         // ---- Batch send ----
-        async function sendBatchMessage(text) {
+        async function sendBatchMessage(endpoint, text) {
             setStatus('正在调用 Agent...', 'loading');
             try {
-                const resp = await fetch('/api/test/chat', {
+                const resp = await fetch(endpoint, {
                     method: 'POST',
                     headers: { 'Content-Type': 'text/plain' },
                     body: text
@@ -341,9 +348,14 @@
             sendBtn.disabled = true;
 
             if (mode === 'stream') {
+                // 流式输出只支持纯 Model
                 await sendStreamMessage(text);
             } else {
-                await sendBatchMessage(text);
+                // 一次性返回：根据 agentMode 选择 ReActAgent 或纯 Model
+                const endpoint = agentMode === 'react'
+                    ? '/api/test/chat'
+                    : '/api/test/chat/simple';
+                await sendBatchMessage(endpoint, text);
             }
         }
 
