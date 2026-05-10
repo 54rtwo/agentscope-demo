@@ -6,6 +6,7 @@ import io.agentscope.core.ReActAgent;
 import io.agentscope.core.message.Msg;
 import io.agentscope.core.message.MsgRole;
 import io.agentscope.core.message.TextBlock;
+import io.agentscope.core.message.ToolUseBlock;
 import io.agentscope.core.model.ChatResponse;
 import io.agentscope.core.model.DashScopeChatModel;
 import io.agentscope.core.tool.Toolkit;
@@ -15,6 +16,7 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import reactor.core.publisher.Flux;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
@@ -123,8 +125,6 @@ public class SimpleAgentService {
                 .build();
 
         // ===== 教学点：ReActAgent.call() 返回 Mono<Msg> =====
-        // 注意：ReActAgent 有真正的 call() 方法（继承自 AgentBase）
-        // 不需要像 Model 那样用 stream().last().block()
         Msg response = reactAgent.call(userMsg).block();
 
         long duration = System.currentTimeMillis() - start;
@@ -135,10 +135,21 @@ public class SimpleAgentService {
                 .findFirst()
                 .orElse("");
 
+        // ===== 教学点：从 Memory 中提取工具调用记录 =====
+        List<String> toolCalls = reactAgent.getMemory().getMessages().stream()
+                .flatMap(msg -> msg.getContent().stream())
+                .filter(cb -> cb instanceof ToolUseBlock)
+                .map(cb -> {
+                    ToolUseBlock tub = (ToolUseBlock) cb;
+                    return tub.getName() + "(" + tub.getInput() + ")";
+                })
+                .toList();
+
         return new AgentResponse(
                 responseText,
                 model.getModelName() + " + ReActAgent",
-                duration
+                duration,
+                toolCalls
         );
     }
 

@@ -92,6 +92,24 @@
         .md-content a { color: #1976d2; }
         .md-content hr { border: none; border-top: 1px solid #e0e0e0; margin: 12px 0; }
 
+        /* Tool call badges */
+        .tool-calls {
+            margin-top: 8px;
+            padding-top: 8px;
+            border-top: 1px solid #ccc;
+            font-size: 12px;
+            color: #666;
+        }
+        .tool-tag {
+            display: inline-block;
+            background: #e3f2fd;
+            color: #1565c0;
+            padding: 2px 8px;
+            border-radius: 12px;
+            margin: 2px 4px;
+            font-family: monospace;
+        }
+
         .message.system {
             background: #fff3e0;
             color: #666;
@@ -329,6 +347,14 @@
                 const msgDiv = addMessage('', 'agent');
                 renderMarkdown(msgDiv.querySelector('.md-content'), data.content || '');
                 setStatus(`成功! 耗时: ${data.durationMs}ms`, 'success');
+                // Show tool calls if any
+                if (data.toolCalls && data.toolCalls.length > 0) {
+                    const toolDiv = document.createElement('div');
+                    toolDiv.className = 'tool-calls';
+                    toolDiv.innerHTML = '<strong>工具调用：</strong>' +
+                        data.toolCalls.map(t => `<span class="tool-tag">${escHtml(t)}</span>`).join('');
+                    msgDiv.appendChild(toolDiv);
+                }
             } catch (err) {
                 addMessage(`错误: ${err.message}`, 'error');
                 setStatus(`失败: ${err.message}`, 'error');
@@ -336,6 +362,10 @@
                 loading = false;
                 sendBtn.disabled = false;
             }
+        }
+
+        function escHtml(s) {
+            return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
         }
 
         // ---- Main send ----
