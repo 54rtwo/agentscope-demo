@@ -70,7 +70,9 @@ String text = response.getContent().stream()
 
 ---
 
-### 3. Agent — 最简调用方式
+### 3. Agent — 最简调用方式（纯 Model）
+
+**注意**：本节介绍的是"纯 Model 调用"，即 Model 本身就是最简 Agent。关于带工具调用能力的 **ReActAgent**，详见 [Lesson 3](lesson3-tool-and-react-agent.md)。
 
 AgentScope 1.0.4 中，**Model 只有 `stream()` 方法，没有 `call()` 方法**。
 
